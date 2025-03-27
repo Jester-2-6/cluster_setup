@@ -1,53 +1,51 @@
 #!/bin/bash
 
 # Define variables
-NODE_EXPORTER_VERSION="1.6.1"
-NODE_EXPORTER_USER="node_exporter"
-NODE_EXPORTER_GROUP="node_exporter"
-NODE_EXPORTER_HOME="/home/node_exporter"
+EXPORTER_VERSION="1.3.0"
+EXPORTER_NAME="nvidia_gpu_exporter-${EXPORTER_VERSION}.linux-amd64"
+EXPORTER_TARBALL="${EXPORTER_NAME}.tar.gz"
+DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v${EXPORTER_VERSION}/${EXPORTER_TARBALL}"
+INSTALL_DIR="/usr/local/bin"
+SERVICE_FILE="/etc/systemd/system/nvidia_gpu_exporter.service"
 
-# Update and install necessary packages
-sudo apt-get update
-sudo apt-get install -y wget
+# Download the NVIDIA GPU Exporter tarball
+wget -q $DOWNLOAD_URL -O $EXPORTER_TARBALL
 
-# Create a system user for node_exporter
-sudo useradd --system --no-create-home --shell /bin/false $NODE_EXPORTER_USER
+# Verify the download
+if [ ! -f "$EXPORTER_TARBALL" ]; then
+    echo "Download failed: $EXPORTER_TARBALL not found."
+    exit 1
+fi
 
-# Download and extract Node Exporter
-cd /tmp
-wget https://github.com/prometheus/node_exporter/releases/download/v$NODE_EXPORTER_VERSION/node_exporter-$NODE_EXPORTER_VERSION.linux-amd64.tar.gz
-tar xvf node_exporter-$NODE_EXPORTER_VERSION.linux-amd64.tar.gz
+# Extract the tarball
+tar -xzf $EXPORTER_TARBALL
 
-# Move the binary to /usr/local/bin
-sudo mv node_exporter-$NODE_EXPORTER_VERSION.linux-amd64/node_exporter /usr/local/bin/
-
-# Set ownership and permissions
-sudo chown $NODE_EXPORTER_USER:$NODE_EXPORTER_GROUP /usr/local/bin/node_exporter
+# Move the binary to the installation directory
+sudo mv $EXPORTER_NAME/nvidia_gpu_exporter $INSTALL_DIR/
 
 # Clean up
-rm -rf node_exporter-$NODE_EXPORTER_VERSION.linux-amd64*
-cd ~
+rm -rf $EXPORTER_NAME $EXPORTER_TARBALL
 
-# Create systemd service file
-sudo bash -c "cat <<EOF > /etc/systemd/system/node_exporter.service
+# Create a systemd service file
+sudo bash -c "cat > $SERVICE_FILE" <<EOL
 [Unit]
-Description=Prometheus Node Exporter
-Wants=network-online.target
-After=network-online.target
+Description=NVIDIA GPU Exporter
+After=network.target
 
 [Service]
-User=$NODE_EXPORTER_USER
-Group=$NODE_EXPORTER_GROUP
-Type=simple
-ExecStart=/usr/local/bin/node_exporter
+ExecStart=$INSTALL_DIR/nvidia_gpu_exporter
+User=nobody
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOF"
+EOL
 
-# Reload systemd, enable and start node_exporter service
+# Reload systemd to recognize the new service
 sudo systemctl daemon-reload
-sudo systemctl enable node_exporter
-sudo systemctl start node_exporter
 
-echo "Node Exporter installation and setup completed successfully."
+# Enable and start the NVIDIA GPU Exporter service
+sudo systemctl enable nvidia_gpu_exporter
+sudo systemctl start nvidia_gpu_exporter
+
+echo "NVIDIA GPU Exporter installation and service setup complete."
